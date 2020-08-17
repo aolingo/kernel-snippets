@@ -1,0 +1,300 @@
+
+This file is to include your testing documentation. The file is to be
+in plain text ASCII and properly spaced and edited so that when it is
+viewed on a Linux machine it is readable. Not all ASCII files created
+on a Windows machine display as expected due to the differences with
+respect to how new lines and carriage returns are treated. Line widths
+are to be limited to 80 characters.
+
+1. Test showing prioritization of signals [PASSED]
+    Description:
+        We tested this by creating 4 test processes (test1() - test4() in user.c
+        ). We then set the handler functions for test2's signum 4 and 25 to be
+        hello() and bye(), which prints different messages. We then had test3
+        send a signum 4 to test2 and test4 send signum 25 to test2. Without 
+        prioritization, test2 will service signum 4 before signum 25 because
+        test3 proc runs before test4, so the handler function for signum 4 in 
+        test2 will run first (which prints "hello world") and then signum 25's
+        handler runs ("goodbye world"). With priorization, the order of the 
+        handler func print statements will be reverse ("bye" before "hello"). 
+              void test2(void) {
+                sysputs("Test2 has been called\n");
+                syssignal(4, &hello);
+                syssignal(25, &bye);
+                syswait(1);
+                }
+    Kernel Output:
+                        Creating Idle Process
+                        create inited
+                        Test1 has been called
+                        Test2 has been called
+                        dispatcher handling syswait
+                        proc 2's state is now 21
+                        proc 2 is waiting for process 1
+                        Test3 has been called
+                        Test4 has been called
+                        goodbye world
+                        hello world
+        As expected, goodbye world printed before hello world. This confirms 
+        that we implemented signal prioritization correctly.
+
+2. syssighandler() test case aka syssignal() test case [PASSED]
+    Purpose: 
+        To test that a new handler function can be set for a given signal num
+    Description:
+        We tested this by creating a new process called root2() in user.c
+        and have it called syssignal() with different parameters of signum and
+        handler functions. Eg. 
+              void root2(void) {
+                sysputs("Root2 has been called\n");
+                kprintf("address of sysstop is %x\n", &sysstop);
+                int ret1 = syssignal(4, &sysstop);
+                kprintf("addr of old handler ret1 is %x\n", ret1);
+                int ret2 = syssignal(40, 0);
+                kprintf("return value of ret2 is %x\n", ret2);
+                int ret3 = syssignal(4, 0);
+                kprintf("addr of old handler ret3 is %x\n", ret3);
+                }
+        In addition, we printed the address of the handler function for signum 4
+        inside create.c when we created the root2 process and initialized all 
+        the handler entries in root2's sigtable so we can compare it to ret1, as
+        the two should be the same address. For ret2, because the signum is
+        greater than 31, the expected result should be 0. For ret3, the result
+        should be the address of sysstop since we previously set the handler 
+        function for signal 4 to be sysstop.
+    Kernel Output:
+                        CPSC 415, 2019W1
+                    32 Bit Xeros -12.0.0 - even before beta
+                    Located at: 0 to 9600
+                    Max addr is 4194303 3fffff
+                    memory inited
+                    dispatcher inited
+                    Context init called
+                    context inited
+                    Creating Idle Process
+                    addr of handler is set to 0
+                    create inited
+                    Root2 has been called
+                    address of sysstop is 1878
+                    setting new handler
+                    addr of old handler ret1 is 0
+                    invalid signal number, error
+                    return value of ret2 is 0
+                    setting new handler
+                    addr of old handler ret3 is 1878
+        As expected, the addr of old handler ret1 returned 0 since the default
+        handler for signum 4 was set to NULL when creating the root2 proc. The
+        ret2 syssignal call returned 0 as well since it's an error with signum
+        being greater than 31. ret3 returned the address of sysstop which was 
+        0x1878.                
+
+3. syskill test [PASSED]
+    Refer to test #1 (Test showing prioritization of signals) since we sent 
+    signals #4 and #25 via syskill to test2 proc (the handlers for those two
+    signums were also set before). test2 proc serviced the signals correctly by
+    calling the corresponding handler functions (hello and bye).
+
+4. syswait() test case [PASSED]
+    Description:
+        We tested our syswait by creating two new processes test1 and test2.
+        They have the pids 1 and 2 respectively. test1 doesn't do anything, its
+        main purpose is so that test has a valid process to wait on. We included
+        a few syswait calls with different pids as arguments to test the 
+        functionalities of syswait. Eg. 
+              void test2(void) {
+                sysputs("Test2 has been called\n");
+                int ret1 = syswait(0);
+                int ret2 = syswait(3);
+                kprintf("syswait result for ret1 and ret2 is %d, %d\n", ret1, ret2);
+                int ret3 = syswait(1);
+                kprintf("should not print this and below\n");
+                kprintf("syswait result for ret3 is %d\n", ret3);
+              }
+        In addition, we added some print statements inside the dispatcher's 
+        SYS_WAIT case, to verify that test2's process state is set correctly 
+        to STATE_WAIT (which is 21), and its waitingpid field is set to that of
+        test1. 
+    Kernel Output:
+                        CPSC 415, 2019W1
+                    Creating Idle Process
+                    test1 pid = 1, test2 pid = 2
+                    create inited
+                    Test1 has been called
+                    Test2 has been called
+                    dispatcher handling syswait
+                    dispatcher handling syswait
+                    syswait result for ret1 and ret2 is -1, -1
+                    dispatcher handling syswait
+                    proc 2's state is now 21
+                    proc 2 is waiting for process 1
+        As expected, ret1 and ret2 is -1 since you can't wait on idleproc and
+        process 3 does not exist. AS for ret3, the system call syswait(1) got
+        handled in the dispatcher and process 2 has been set to the proper 
+        state (21 = STATE_WAIT) and ret3 didn't get printed since proc 2 is 
+        now waiting for proc 1.
+
+5. sysopen() with invalid arguments [PASSED]
+6. syswrite() with an invalid file file descriptor [PASSED]
+7. sysioctl() test for invalid commands [PASSED]
+    Description:
+        We tested 5, 6 and 7 together through creating a new user process called
+        invalidDeviceTest() in user.c. In it, we called sysopen() with an
+        invalid device_num not in our device table (eg. 99), syswrite() with 
+        an invalid fd (99 again) and then finally, we opened the rand device
+        by calling sysopen(1) first, and then called sysioctl on the rand device
+        with an invalid/unsupported command (eg. 99). We checked the return
+        values of the 3 invalid syscalls to make sure they are all -1 (which
+        signifies error). In addition, we added kprintf statements denoting 
+        the error in each of the corresponding di_calls to make sure that they
+        are failing in the right places (invalid device_num, invalid fd and 
+        invalid command). Eg.
+              void invalidDeviceTest(void) {
+                sysputs("Invalid Device tests are being called\n");
+                int ret1 = sysopen(99);
+                kprintf("return value of sysopen is %d\n", ret1);
+                int ret2 = syswrite(99, 0, 0);
+                kprintf("return value of syswrite is %d\n", ret2);
+                int fd = sysopen(1);
+                int ret3 = sysioctl(fd, 99, 3);
+                kprintf("return value of sysioctl is %d\n", ret3);
+                }
+    Kernel Output:
+                        device table inited
+                        Creating Idle Process
+                        create inited
+                        Invalid Device tests are being called
+                        device not found in open
+                        return value of sysopen is -1
+                        invalid fd for write
+                        return value of syswrite is -1
+                        got to di_ioctl
+                        got to randIoctl
+                        invalid command for randIoctl encountered
+                        return value of sysioctl is -1
+        As expected, all three invalid device system calls returned -1 and 
+        the corresponding error message were printed before they returned.
+        Eg. device not found in open, invalid fd for write and invalid command
+        for randIoctl encountered.
+
+8. sysread() when there are more characters buffered in [FAILED]
+kernel than the read requests
+   Desription:
+	To test this functionality we would have implemented our keyboard
+	read functionality. Then since the keyboard device has a buffer
+	of 4 characters, we would need to call a read on the keyboard
+	device to with a buffer len less than 4.
+	Since our keyboard read() was not implemented, this test is not
+	passing.
+
+9. A test scenario that shows reading and writing of the zero device. [PASSED]
+   Description:
+        To test our zero device, we created a new process called
+	zeroDeviceTest(). This process opens a zero device then initializes
+	a read and write buffer. We first write 16 bytes to the zero device
+	by calling syswrite() and checking if the return value is 16. Then
+	we use memset to set 40 bytes to the read buffer and we print the
+	5 first 4 bytes (20 bytes) of the buffer. This should print out 5
+	numbers that was set by memset. Then we call sysread() with 16 bytes
+	into the read buffer and print the 5 first 4 bytes again. This should
+	give use 4 zeros and number that isn't zero. See below:
+	
+              void zeroDeviceTest(void) {
+  	      	   sysputs("Zero Device test has been called\n");
+  		   int fd = sysopen(0);
+		   int *sendBuff = kmalloc(800);
+		   int *readBuff = kmalloc(800);
+		   memset(readBuff, 8, 40);
+		   kprintf("Writing 16 bytes to zero dev\n");
+		   int ret1 = syswrite(fd, sendBuff, 16);
+		   kprintf("Number of bytes written: %d\n", ret1);
+		   kprintf("memset 40 bytes to readBuff\n");
+		   kprintf("First 20 bytes of readBuff before read:\n");
+		   for (int i = 0; i < 5; i++) {
+		       kprintf("%d\n", *(readBuff + i));
+		   }
+		   kprintf("First 20 bytes of readBuff after read:\n");
+		   sysread(fd, readBuff, 16);
+		   for (int i = 0; i < 5; i++) {
+		       kprintf("%d\n", *(readBuff + i));
+		   }
+	      }
+    Kernel Output:
+                        Zero Device test has been called
+			Writing 16 bytes to zero dev
+			Number of bytes written: 16
+			memset 40 bytes to readBuff
+			First 20 bytes of readBuff before read:
+			134744072
+			134744072
+			134744072
+			134744072
+			134744072
+			First 20 bytes of readBuff after read:
+			0
+			0
+			0
+			0
+			134744072
+        As expected, writing 16 bytes to the zero device returns 16.
+	Before reading from the zero device, the first 20 bytes of
+	the readBuff prints a non-zero value, while after reading from
+	the zero device, the readBuff contains 16 bytes of 0s. 
+	
+10. Two test cases for scenarios not covered here or in the test program.
+
+    10.a. Test case for read() on random device [PASSED]
+    Description:
+        To test our random device, we created a process called
+	randomDeviceTest() as seen below. This process initiates a read
+	buffer and sets the default values in the buffer to 0 and opens
+	a random device with sysopen(1). We then call sysread() on the
+	random device and pass in 16 bytes. In our random read() method
+	we added a kprintf() to check which values would be added to
+	the buffer. If our random device was implemented correctly, then
+	we should print 4 different random values between 0 and 255.
+	
+              void randomDeviceTest() {
+	      	   sysputs("Random Device test has been called\n");
+	      	   int fd = sysopen(1);
+	      	   int* readBuff = kmalloc(800);
+	      	   memset(readBuff, 0, 40);
+	      	   sysread(fd, readBuff, 16);
+	      }
+    Kernel Output:
+              Context init called
+	      Random Device test has been called
+	      random value 1 is 8
+	      random value 2 is 148
+	      random value 3 is 168
+	      random value 4 is 175
+
+        As expected, when we read 16 bytes from the random device we
+	generate 4 random values between 0 and 255 and store it in
+	our buffer. Therefore the test passed.
+    
+    10.b. Test case for write() on keyboard device [PASSED]
+    Description:
+        To test that our keyboard device returns the correct value
+	when a write is called on it. We created a new process called
+	keyboardTest() as seen below. The process opens a keyboard
+	device with sysopen(2) and then initializes a write buffer.
+	We then call syswrite on the keyboard device and pass in the
+	write buff. Finally, we used kprintf() to print the value
+	that is returned by syswrite(). If this is working correctly
+	the value should print -1.
+	
+              void keyboardTest() {
+	      	   kprintf("testing keyboard\n");
+	      	   int fd = sysopen(2);
+	      	   int writeBuff = kmalloc(800);
+	      	   int ret = syswrite(fd, writeBuff, 16);
+		   kprintf("ret value is: %d\n", ret);
+	      }
+    Kernel Output:
+              Context init called
+	      testing keyboard
+	      ret value is: -1
+
+        As expected, the return value was -1. Therefore our keyboard
+	device is behaving accordingly to the specifictions, in that
+	it does not support write().

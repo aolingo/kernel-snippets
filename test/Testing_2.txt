@@ -1,0 +1,272 @@
+
+This file is to include your testing documentation. The file is to be
+in plain text ASCII and properly spaced and edited so that when it is
+viewed on a Linux machine it is readable. Not all ASCII files created
+on a Windows machine display as expected due to the differences with
+respect to how new lines and carriage returns are treated. Line widths
+are to be limited to 80 characters.
+
+1. Two tests for send()
+
+  1a. valid send of message "hello" from one process to another [PASSED]
+    Purpose: 
+        To test that send is working properly and returns with the right result
+    Description:
+        We created a send process named sendTest1 in user.c as follows:
+            void sendTest1(void) {
+              char *testBuff = kmalloc(800);
+              memCpy(testBuff, "hello", 5);
+              int result = syssend(4, testBuff, 5);
+              kprintf("# of bytes sent is %d and info sent is %s\n", result, 
+              testBuff);
+            }
+       and a matching receive process named recvTest1 in user.c as follows:
+            void recvTest1(void) {
+              char *testBuff = kmalloc(800);
+              memCpy(testBuff, "donald", 6);
+              PID_t *from_pid = 3;
+              int result = sysrecv(from_pid, testBuff, 5);
+              kprintf("# of bytes received is %d and result is %s\n", result, 
+              testBuff);
+            }
+        We created these two processes in root, so send proc has pid = 3 and
+        recv proc has pid = 4. We confirmed this after creating them in root().
+        Then, we added apprporiate print statements in the kernel handler
+        functions of send and receive to make sure that since send runs first,
+        send will block and then when receive runs, it will copy over the buffer
+        and unblock and set the return value of the send process. So, we should 
+        see the print statement of recvTest1() before that of sendTest1().
+        Finally, we printed the result of the syssend and sysrecv to make sure 
+        it is 5 since the # of bytes = 5 (eg. hello has 5 characters). And the
+        buffer in sysrecv will be "hellod" (not "donald"). 
+        The output from the kernel for this test is as expected:
+                        CPSC 415, 2019W1
+                        32 Bit Xeros -12.0.0 - even before beta
+                        Located at: 0 to 6440
+                        Max addr is 4194303 3fffff
+                        memory inited
+                        dispatcher inited
+                        context inited
+                        idle process has pid of 1
+                        create inited
+                        Root has been called
+                        SendTest pid = 3 RecvTest pid = 4
+                        waiting for receive, block send
+                        send is present, so recv right away
+                        # of bytes received is 5 and result is hellod
+                        # of bytes sent is 5 and info sent is hello
+
+  1b. invalid send where process attempts to send to itself [PASSED]
+    Purpose: 
+        To test that send returns with -2 when trying to send to itself.
+    Description:
+        We created a test process named sendTest3 in user.c as follows:
+            void sendTest3(void) {
+                char *testBuff = kmalloc(800);
+                memCpy(testBuff, "hello", 5);
+                int result = syssend(3, testBuff, 5);
+                kprintf("send result is %d \n", result);
+              }
+        where we are sending to itself (this process has pid =3). 
+        In our dispatcher, we added a kprintf statement in the SYS_SEND case to 
+        alert us if the process is trying to send to itself. 
+        Finally, we printed the result of the syssend to make sure that it is 
+        -2. The output from the kernel for this test is as expected:
+                        Root has been called
+                        SendTest pid = 3 RecvTest pid = 2779096485
+                        send result is -2
+
+2. Two tests for recv()
+
+  2a. valid receive message "hello" from one process to another [PASSED]
+      - Refer to test 1a. above as it tests both send and receive
+
+  2b. valid receive any test [PASSED]
+      Purpose:
+        To test that receive any works, eg. sysrecv with argument from_pid = 0
+      Description:
+        Similar to test 1a. from above, we will be using the sendTest1 process
+        as our sending process. We then created a recvTest2 for recvAny:
+          void recvTest2(void) {
+            char *testBuff = kmalloc(800);
+            memCpy(testBuff, "donald", 6);
+            PID_t *from_pid = 0;
+            int result = sysrecv(from_pid, testBuff, 5);
+            kprintf("# of bytes received is %d and result is %s\n", 
+            result, testBuff);
+          }
+        We then added print statements at relevant areas like test 1a to make
+        sure everything is as expected, which it is. The output is as follows:
+                Root has been called
+                SendTest pid = 3 RecvTest pid = 4
+                waiting for receive, block send
+                receivingAny right now
+                # of bytes received is 5 and result is hellod
+                # of bytes sent is 5 and info sent is hello
+
+3. One test for send() failure not demonstrated in producer-consumer problem
+  - invalid send to the pid of a non-existing process [PASSED]
+    Purpose: 
+        To test the case that send return with -1 when trying to send to an
+        non-existing process.
+    Description:
+        We created a test process named sendTest2 in user.c as follows:
+            void sendTest2(void) {
+              char *testBuff = kmalloc(800);
+              memCpy(testBuff, "hello", 5);
+              int result = syssend(100, testBuff, 5);
+              kprintf("send result is %d \n", result);
+            }
+        where we are sending to a process with pid of 100 which does not exist
+        in our kernel. In our dispatcher, we added a kprintf statement in the 
+        SYS_SEND case to alert us if dst process id DNE. Finally, we printed
+        the result of the syssend to make sure that it is -1. The output from
+        the kernel for this test is as expected:
+                              CPSC 415, 2019W1
+                      32 Bit Xeros -12.0.0 - even before beta
+                      Located at: 0 to 6440
+                      Max addr is 4194303 3fffff
+                      memory inited
+                      dispatcher inited
+                      context inited
+                      idle process has pid of 1
+                      create inited
+                      Root has been called
+                      SendTest pid = 3 RecvTest pid = 2779096485
+                      dst process does not exist
+                      send result is -1
+
+4. Two tests for recv() failures
+
+  4a. invalid recv where process attempts to receive from itself [PASSED]
+    Purpose: 
+        To test the case that recv return with -3 when trying to recv itself
+    Description:
+        We created a test process named recvTest4 in user.c as follows:
+            void recvTest4(void) {
+                char *testBuff = kmalloc(800);
+                memCpy(testBuff, "donald", 6);
+                PID_t *from_pid = (PID_t *)3;
+                int result = sysrecv(from_pid, testBuff, 5);
+                kprintf("recv result is %d\n", result);
+              }
+        where we are recving from itself. In our dispatcher, we added a kprintf 
+        statement in the SYS_RECV case to alert us of this case. 
+        Finally, we printed the result of the sysrecv to make sure that it is 
+        -3. The output from the kernel for this test is as expected:
+                        RecvTest pid = 3
+                        process trying to receive from itself
+                        recv result is -3
+
+  4b. invalid recv where process to receive from does not exist [PASSED]
+    Purpose: 
+        To test the case that recv returns with -2 when trying to receive from
+        a non-existing process.
+    Description:
+        We created a test process named recvTest3 in user.c as follows:
+            void recvTest3(void) {
+                char *testBuff = kmalloc(800);
+                memCpy(testBuff, "donald", 6);
+                PID_t *from_pid = (PID_t *)100;
+                int result = sysrecv(from_pid, testBuff, 5);
+                kprintf("recv result is %d\n", result);
+              }
+        where we are recving from a process with pid of 100 which does not exist
+        in our kernel. In our dispatcher, we added a kprintf statement in the 
+        SYS_RECV case to alert us if from pid DNE. Finally, we printed
+        the result of the sysrecv to make sure that it is -2. The output from
+        the kernel for this test is as expected:
+                Root has been called
+                RecvTest pid = 3
+                process to receive from does not exist
+                recv result is -2
+
+5. One test for time-sharing (preemption)
+  - idleproc should run after original Producer and Consumer finishes [PASSED]
+    Purpose:
+        By creating an idleproc in init.c (pid = 1) and modifying the dispatcher
+        to not add idleproc to the readyQ in ready() and select the idle process
+        to run in next() if there's no more processes left in ready queue, we
+        can verify our implementation of time sharing/preemption since after 
+        Producer and Consumer finishes, the ready queue will be empty and the 
+        idle process will be selected to run. However, since the timer will 
+        send an interrupt every 10 ms, the dispatcher upon receiving will then
+        check the readyQ again and upon seeing it's still empty, it will 
+        select idle process to run again. This should repeat infinitely.
+    Description:
+        To verify that the above happens, we added kprintf statements in the
+        following areas:
+        1. Else block of next() function in disp.c to confirm that idleprocess
+           is selected to run after root process finishes running
+            else {
+              kprintf("q is empty select idle proc to run\n");
+              p = findPcb(idlePid);
+            }
+        2. In the dispatcher's TIMER_INT switch case, so we know that we are
+           getting an timer interrupt every 10 ms and our ctsw handles it 
+           correctly by passing it forward to the dispatcher
+           case (TIMER_INT):
+            kprintf("handling TIMER_INT, preempting process\n");
+            ready(p);
+            p = next();
+            end_of_intr();
+            break;
+        As expected, the output we got from the kernel (cleaned up some time
+        sharing print statements for readability) was like this:
+          Produce 5
+          Consume 5
+          handling TIMER_INT, preempting process
+          q is empty select idle proc to run
+          handling TIMER_INT, preempting process
+          q is empty select idle proc to run
+          ... (goes on repeating infinitely since ready queue is empty now, so
+          it will just keep preempting idle proc, hence the duplicate prints)
+    P.S. Another way that we tested preemption was to increase the Producer and 
+         Consumer for loop iteration to 10000, and removed the sysyield inside.
+         As expected, instead of alternating Produce and Consume 1 by 1 like
+         before (eg. Produce 0 -> Consume 0 ...), it now alternates every
+         ~1000 Produce and Consume (eg. Produce prints up to 1000 in a row 
+         before preempting to Consume).
+
+6. Two tests for syskill()
+
+  6a. syskill on a non-existing process [PASSED]
+      Purpose: 
+          Test that syskill fails and returns -1 for target process that 
+          doesn't exist.
+      Description:
+          We implemented this test with the initial Producer and Consumer 
+          functionalities: eg. They alternate printing "Produce" and "Consume"
+          5 times each. So in this case, our proctab only has 3 processes with
+          pid from 1 to 3 (Produce pid = 2, Consume pid = 3). We then called
+          syskill(4) inside the Producer's for loop:
+                for (i = 0; i < 5; i++) {
+                  kprintf("Produce %d\n", i);
+                  int c = syskill(4);
+                  kprintf("kill result is %d\n", c);
+                  sysyield();
+                  }
+          And then we checked the kernel printed -1 as output for this function
+          call since no process with pid = 4 exists in the process table.
+    
+  6b. syskill on Consumer (process pid = 3) [PASSED]
+      Purpose: 
+          Test that syskill succeeds in terminating the target process and
+          returns 0.
+      Description:
+          We implemented this test with the initial Producer and Consumer 
+          functionalities: eg. They alternate printing "Produce" and "Consume"
+          5 times each. So in this case, our proctab only has 3 processes with
+          pid from 1 to 3 (Produce pid = 2, Consume pid = 3). We then called
+          syskill(3) inside the Producer's for loop:
+                for (i = 0; i < 5; i++) {
+                  kprintf("Produce %d\n", i);
+                  int c = syskill(3);
+                  kprintf("kill result is %d\n", c);
+                  sysyield();
+                  }
+          And then we made sure the kernel output matches our expectations, eg.
+          it no longer prints any "Consume", it only prints "Produce" and the 
+          kill result = -1 message after the first iteration of Producer's for
+          loop since the Consume process with pid = 3 doesn't exist anymore.
+          

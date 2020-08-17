@@ -1,0 +1,61 @@
+
+This file is to include your testing documentation. The file is to be
+in plain text ASCII and properly spaced and edited so that when it is
+viewed on a Linux machine it is readable. Not all ASCII files created
+on a Windows machine display as expected due to the differences with
+respect to how new lines and carriage returns are treated. Line widths
+are to be limited to 80 characters.
+
+1. Kmeminit + Kmalloc test:
+kmeminit:
+To test that we initialized the memslot pointer and the two header pointers 
+(beforeHole and afterHole) for the two initial free memory chunks, we can check
+the values in the headers (eg. prev, next and dataStart[0]) against the actual
+addresses at those locations since we are given them. We do this through if
+statements in kmeminit, if the values are not equal, we use kprintf to report 
+the error. 
+Sample test:   
+if (beforeHole->size != 0xA0000) {
+    kprintf("beforeHole->size is not correct");
+  }
+kmalloc:
+For kmalloc, we called kmalloc a couple of times and fed it with different 
+values to test out the following cases by using kprintf to compare the 
+returned dataStart address with our hand calculated expected result: 
+  1. Requested memory can be fulfilled by beforeHole free memory chunk
+  2. Requested memory is too big for beforeHole chunk, but can fit in 
+     afterHole chunk.
+  3. Requested memory exceeds maxaddr 
+
+2. Memory Management Test Case 2 Kfree:
+For kfree, because our implementation has 8 cases from A-H, we added print
+statements underneath every one of them and we called kmalloc and kfree several
+times to set up for all these cases, and then ran them to make sure cases A to
+H were all called with the expected combination of kmalloc and kfree calls.
+
+3. Process Management Test Case 1:
+As you can see when you run our code on the emulator, a bunch of print 
+statements appeared in front of your eyes for each step in the kernel-process,
+process-kernel switching pipeline. These print statements along with many others
+that were commented out in our code helps us trace which step has been reached
+successfully and which has not. Eg. we were able to debug that our previous
+ready queue implementation was wrong because it hanged when it reached ready(),
+so we fixed that. We were also able to trace that our switching into kernel is
+returning TRAP was because we weren't setting stack pointers properly after 
+allocating memory in create().
+
+4. Process Management Test Case 2:
+To test our contextswitcher and dispatcher initially (before doing system calls)
+, we first created a "janky" process in the kernel that is already running and 
+pushed it onto the stack and manually added another process and we just switched
+between the two. We did this through print statements in dispatch() to log the 
+request and made sure it reached the 3 cases that we wanted to reach (CREATE,
+YIELD, STOP).
+
+Additional Tests:
+
+Initproc:
+Since initproc is where everything starts by default, we didn't write any 
+explicit tests for this function as if the tests we wrote in functions
+called by initproc (eg. kmeminit and etc) ran when we boot the OS, that
+means initproc is also working properly.
